@@ -101,18 +101,7 @@ install.packages(c("shiny", "shinythemes", "readr", "dplyr", "ggplot2", "DT", "j
   - **Scatter Plot**: Interact with a `plotly` scatter plot (hover for details).
   - **Prédiction**: Input patient data to predict heart disease risk (fixed for reliable predictions).
 
-## File Structure
 
-```
-heart-disease-shiny-app/
-├── data/
-│   └── heart_cleveland_upload.csv  # Cleveland heart disease dataset
-├── app.R                          # Main script (multi-file version)
-├── ui.R                           # UI definition
-├── server.R                       # Server logic
-├── app_single.R                   # Single-file version
-└── README.md                      # This file
-```
 
 ## Troubleshooting
 
@@ -146,17 +135,7 @@ heart-disease-shiny-app/
 
   - If `heart_cleveland_upload.csv` is not in `data/`, update `data_path` in `app.R` or `app_single.R`.
 
-## Contributing
 
-Contributions are welcome! To contribute:
-
-1. Fork the repository.
-2. Create a feature branch (`git checkout -b feature/new-feature`).
-3. Commit changes (`git commit -m "Add new feature"`).
-4. Push to the branch (`git push origin feature/new-feature`).
-5. Open a pull request.
-
-For context, refer to the project report (LaTeX document, not included here) detailing the CRISP-DM methodology and analysis.
 
 ## Acknowledgments
 
