@@ -104,10 +104,6 @@ train_models <- function(data) {
       rf = train(
         condition ~ ., data = train_data, method = "rf",
         trControl = trainControl(method = "cv", number = 5)
-      ),
-      svm = train(
-        condition ~ ., data = train_data, method = "svmRadial",
-        trControl = trainControl(method = "cv", number = 5)
       )
     )
     

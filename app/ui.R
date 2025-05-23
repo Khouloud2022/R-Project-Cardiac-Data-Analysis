@@ -12,7 +12,7 @@ ui <- fluidPage(
   sidebarLayout(
     sidebarPanel(
       selectInput("model_type", "Choisir le modèle:",
-                  choices = c("Régression Logistique" = "glm", "Forêt Aléatoire" = "rf", "SVM" = "svm"),
+                  choices = c("Régression Logistique" = "glm", "Forêt Aléatoire" = "rf"),
                   selected = "glm"),
       selectInput("variable", "Choisir une variable:",
                   choices = c("age", "sex", "chol", "trestbps", "thalach")),
