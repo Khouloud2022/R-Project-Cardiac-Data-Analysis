@@ -1,0 +1,108 @@
+# ---- Charger les packages nécessaires ----
+library(shiny)      # Pour l'application Shiny
+library(readr)      # Pour read_csv
+library(dplyr)      # Pour les manipulations de données
+library(ggplot2)     # Pour les visualisations
+library(DT)         # Pour les tables interactives
+library(janitor)    # Pour nettoyer les noms des colonnes
+
+heart_data <- read_csv("C:/Users/Ghofr/Desktop/projet_sante/Examen/data/heart_cleveland_upload.csv")
+# Nettoyer les noms de colonnes (optionnel)
+heart_data <- heart_data %>% clean_names()
+
+# Vérifier les valeurs manquantes
+sum(is.na(heart_data))
+colSums(is.na(heart_data))
+
+
+
+
+
+
+
+# Convertir les variables catégorielles en facteurs
+heart_data <- heart_data %>%
+  mutate(
+    sex = factor(sex, levels = c(0, 1), labels = c("Femme", "Homme")),
+    cp = factor(cp, levels = 0:3, labels = c("Typique", "Atypique", "Douleur non angineuse", "Asymptomatique")),
+    fbs = factor(fbs, levels = c(0, 1), labels = c("<= 120 mg/dl", "> 120 mg/dl")),
+    restecg = factor(restecg, levels = 0:2, labels = c("Normal", "Anomalie onde ST-T", "Hypertrophie ventriculaire")),
+    exang = factor(exang, levels = c(0, 1), labels = c("Non", "Oui")),
+    slope = factor(slope, levels = 0:2, labels = c("Descente", "Plate", "Montée")),
+    thal = factor(thal, levels = c(0, 1, 2), labels = c("Normal", "Défaut fixe", "Défaut réversible")),
+    condition = factor(condition, levels = c(0, 1), labels = c("Absence", "Présence"))
+  )
+
+
+
+
+# Vérifier les valeurs aberrantes (outliers)
+heart_data %>%
+  select(where(is.numeric)) %>%
+  boxplot()
+
+
+
+
+
+
+
+
+
+# Statistiques descriptives
+summary(heart_data)
+
+# Distribution de la condition (variable cible)
+ggplot(heart_data, aes(x = condition)) +
+  geom_bar(fill = c("skyblue", "salmon")) +
+  labs(title = "Distribution des cas de maladie cardiaque",
+       x = "Condition cardiaque", y = "Nombre de patients")
+
+
+# Corrélations entre variables numériques
+library(corrplot)
+numeric_data <- heart_data %>% select(where(is.numeric))
+cor_matrix <- cor(numeric_data)
+corrplot(cor_matrix, method = "color")
+
+
+
+
+# Relation entre âge et condition cardiaque
+ggplot(heart_data, aes(x = age, fill = condition)) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Distribution d'âge par condition cardiaque")
+
+
+
+
+
+
+# Histogramme de l'âge
+ggplot(heart_data, aes(x = age)) +
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black")) +
+  labs(title = "Distribution d'âge des patients", x = "Âge", y = "Nombre")
+
+# Boxplot de cholestérol par condition
+ggplot(heart_data, aes(x = condition, y = chol, fill = condition)) +
+  geom_boxplot() +
+  labs(title = "Niveau de cholestérol par condition cardiaque",
+       x = "Condition cardiaque", y = "Cholestérol (mg/dl)")
+
+# Fréquence des types de douleur thoracique
+ggplot(heart_data, aes(x = cp, fill = condition)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Type de douleur thoracique par condition cardiaque",
+       x = "Type de douleur", y = "Nombre") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Fréquence cardiaque maximale par sexe et condition
+ggplot(heart_data, aes(x = sex, y = thalach, fill = condition)) +
+  geom_boxplot() +
+  labs(title = "Fréquence cardiaque maximale par sexe et condition",
+       x = "Sexe", y = "Fréquence cardiaque maximale")
+
+
+
+
+

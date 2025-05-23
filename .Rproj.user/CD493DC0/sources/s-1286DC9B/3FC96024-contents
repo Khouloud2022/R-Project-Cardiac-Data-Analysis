@@ -1,0 +1,47 @@
+server <- function(input, output) {
+  filtered_data <- reactive({
+    heart_data %>%
+      filter(age >= input$age_range[1] & age <= input$age_range[2])
+  })
+  
+  output$plot <- renderPlot({
+    data <- filtered_data()
+    
+    if (input$plot_type == "Histogramme") {
+      p <- ggplot(data, aes_string(x = input$variable))
+      if (input$by_condition) {
+        p <- p + geom_histogram(aes(fill = condition), position = "dodge", bins = 30)
+      } else {
+        p <- p + geom_histogram(fill = "skyblue", bins = 30)
+      }
+    } else if (input$plot_type == "Boxplot") {
+      if (input$by_condition) {
+        p <- ggplot(data, aes_string(x = "condition", y = input$variable, fill = "condition"))
+      } else {
+        p <- ggplot(data, aes_string(y = input$variable))
+      }
+      p <- p + geom_boxplot()
+    } else if (input$plot_type == "Densité") {
+      p <- ggplot(data, aes_string(x = input$variable))
+      if (input$by_condition) {
+        p <- p + geom_density(aes(fill = condition), alpha = 0.5)
+      } else {
+        p <- p + geom_density(fill = "skyblue", alpha = 0.5)
+      }
+    }
+    
+    p + theme_minimal() + labs(title = paste("Distribution de", input$variable))
+  })
+  
+  output$summary <- renderPrint({
+    summary(filtered_data()[, input$variable, drop = FALSE])
+  })
+  
+  output$table <- renderDT({
+    datatable(filtered_data(), options = list(pageLength = 5))
+  })
+}
+
+
+
+

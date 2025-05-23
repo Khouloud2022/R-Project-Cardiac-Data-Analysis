@@ -1,0 +1,39 @@
+
+library(shiny)
+library(ggplot2)
+library(dplyr)
+library(DT)
+
+# Charger les données
+heart_data <- read_csv("C:/Users/Ghofr/Desktop/projet_sante/Examen/data/heart_cleveland_upload.csv")
+
+# Nettoyage (comme précédemment)
+heart_data <- heart_data %>%
+  mutate(
+    sex = factor(sex, levels = c(0, 1), labels = c("Femme", "Homme")),
+    condition = factor(condition, levels = c(0, 1), labels = c("Absence", "Présence"))
+  )
+
+# Interface utilisateur
+ui <- fluidPage(
+  titlePanel("Analyse des données cardiaques"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("variable", "Choisir une variable:",
+                  choices = c("age", "sex", "chol", "trestbps", "thalach")),
+      selectInput("plot_type", "Type de graphique:",
+                  choices = c("Histogramme", "Boxplot", "Densité")),
+      checkboxInput("by_condition", "Segmenter par condition cardiaque", value = TRUE),
+      sliderInput("age_range", "Plage d'âge:",
+                  min = min(heart_data$age), max = max(heart_data$age),
+                  value = c(min(heart_data$age), max(heart_data$age)))
+    ),
+    mainPanel(
+      tabsetPanel(
+        tabPanel("Visualisation", plotOutput("plot")),
+        tabPanel("Résumé", verbatimTextOutput("summary")),
+        tabPanel("Tableau", DTOutput("table"))
+      )
+    )
+  )
+)
