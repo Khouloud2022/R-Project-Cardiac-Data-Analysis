@@ -1,14 +1,167 @@
 library(shiny)
-library(ggplot2)
+library(shinythemes)
+library(readr)
 library(dplyr)
+library(ggplot2)
 library(DT)
+library(janitor)
+library(caret)
 library(corrplot)
 library(pROC)
-library(caret)
 library(plotly)
+library(randomForest)
+library(e1071)
 
+# ---- Chemin du fichier ----
+data_path <- file.path("data", "heart_cleveland_upload.csv")
+
+# ---- Fonction de chargement et prétraitement ----
+load_and_preprocess_data <- function(file_path) {
+  tryCatch({
+    if (!file.exists(file_path)) stop("Fichier introuvable : ", file_path)
+    data <- read_csv(file_path) %>% clean_names() %>%
+      mutate(
+        sex = factor(sex, levels = c(0, 1), labels = c("Femme", "Homme")),
+        cp = factor(cp, levels = 0:3, labels = c("Typique", "Atypique", "Douleur non angineuse", "Asymptomatique")),
+        fbs = factor(fbs, levels = c(0, 1), labels = c("<= 120 mg/dl", "> 120 mg/dl")),
+        restecg = factor(restecg, levels = 0:2, labels = c("Normal", "Anomalie onde ST-T", "Hypertrophie ventriculaire")),
+        exang = factor(exang, levels = c(0, 1), labels = c("Non", "Oui")),
+        slope = factor(slope, levels = 0:2, labels = c("Descente", "Plate", "Montée")),
+        thal = factor(thal, levels = c(0, 1, 2), labels = c("Normal", "Défaut fixe", "Défaut réversible")),
+        condition = factor(condition, levels = c(0, 1), labels = c("Absence", "Présence"))
+      )
+    if (any(is.na(data))) warning("Valeurs manquantes détectées.")
+    message("Données chargées avec succès. Dimensions : ", nrow(data), " lignes, ", ncol(data), " colonnes.")
+    return(data)
+  }, error = function(e) {
+    stop("Erreur lors du chargement des données : ", conditionMessage(e))
+  })
+}
+
+# ---- Fonction de préparation des données pour le modèle ----
+prepare_model_data <- function(data) {
+  tryCatch({
+    features <- c("age", "sex", "chol", "trestbps", "thalach", "cp", "exang", "thal")
+    model_data <- data %>%
+      select(all_of(features), condition) %>%
+      mutate(
+        sex = as.numeric(sex == "Homme"),
+        exang = as.numeric(exang == "Oui")
+      )
+    
+    cp_dummy <- model.matrix(~cp - 1, data = model_data) %>% as.data.frame()
+    thal_dummy <- model.matrix(~thal - 1, data = model_data) %>% as.data.frame()
+    
+    colnames(cp_dummy) <- c("cp_Typique", "cp_Atypique", "cp_Douleur_non_angineuse", "cp_Asymptomatique")
+    colnames(thal_dummy) <- c("thal_Normal", "thal_Défaut_fixe", "thal_Défaut_réversible")
+    
+    model_data <- model_data %>%
+      bind_cols(cp_dummy[, -1], thal_dummy[, -1]) %>%
+      select(-cp, -thal)
+    
+    message("Données préparées pour le modèle. Colonnes : ", paste(colnames(model_data), collapse = ", "))
+    return(model_data)
+  }, error = function(e) {
+    stop("Erreur lors de la préparation des données : ", conditionMessage(e))
+  })
+}
+
+# ---- Fonction d'entraînement des modèles ----
+train_models <- function(data) {
+  tryCatch({
+    model_data <- prepare_model_data(data)
+    
+    set.seed(123)
+    train_idx <- createDataPartition(model_data$condition, p = 0.8, list = FALSE)
+    train_data <- model_data[train_idx, ]
+    test_data <- model_data[-train_idx, ]
+    
+    if (nrow(test_data) == 0) {
+      stop("Erreur : Ensemble de test vide. Augmentez la taille des données.")
+    }
+    
+    models <- list(
+      glm = train(
+        condition ~ ., data = train_data, method = "glm", family = "binomial",
+        trControl = trainControl(method = "cv", number = 5)
+      ),
+      rf = train(
+        condition ~ ., data = train_data, method = "rf",
+        trControl = trainControl(method = "cv", number = 5)
+      ),
+      svm = train(
+        condition ~ ., data = train_data, method = "svmRadial",
+        trControl = trainControl(method = "cv", number = 5)
+      )
+    )
+    
+    message("Modèles entraînés : ", paste(names(models), collapse = ", "))
+    return(list(models = models, train_data = train_data, test_data = test_data))
+  }, error = function(e) {
+    stop("Erreur lors de l'entraînement des modèles : ", conditionMessage(e))
+  })
+}
+
+# ---- Charger les données et modèle ----
+heart_data <- load_and_preprocess_data(data_path)
+model_results <- train_models(heart_data)
+models <- model_results$models
+train_data <- model_results$train_data
+test_data <- model_results$test_data
+
+# ---- UI ----
+ui <- fluidPage(
+  theme = shinytheme("cerulean"),
+  titlePanel("Analyse des Données Cardiaques"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("model_type", "Choisir le modèle:",
+                  choices = c("Régression Logistique" = "glm", "Forêt Aléatoire" = "rf", "SVM" = "svm"),
+                  selected = "glm"),
+      selectInput("variable", "Choisir une variable:",
+                  choices = c("age", "sex", "chol", "trestbps", "thalach")),
+      selectInput("plot_type", "Type de graphique:",
+                  choices = c("Histogramme", "Boxplot", "Densité")),
+      checkboxInput("by_condition", "Segmenter par condition", value = TRUE),
+      sliderInput("age_range", "Plage d’âge:",
+                  min = 29, max = 77, value = c(29, 77)),
+      selectInput("x_var", "Variable X (Scatter):", choices = c("age", "chol", "trestbps", "thalach")),
+      selectInput("y_var", "Variable Y (Scatter):", choices = c("chol", "age", "trestbps", "thalach")),
+      downloadButton("download_data", "Exporter les données (CSV)"),
+      downloadButton("download_plot", "Exporter le graphique (PNG)")
+    ),
+    mainPanel(
+      tabsetPanel(
+        tabPanel("Visualisation", plotOutput("plot")),
+        tabPanel("Résumé", verbatimTextOutput("summary")),
+        tabPanel("Tableau", DTOutput("table")),
+        tabPanel("Corrélation", plotOutput("corr_plot")),
+        tabPanel("Métriques du Modèle", verbatimTextOutput("model_metrics")),
+        tabPanel("Importance des Variables", plotOutput("var_imp_plot")),
+        tabPanel("Courbe ROC", plotOutput("roc_plot")),
+        tabPanel("Scatter Plot", plotlyOutput("scatter_plot")),
+        tabPanel("Prédiction",
+                 h3("Prédire la Maladie Cardiaque"),
+                 numericInput("pred_age", "Âge:", value = 50, min = 29, max = 77),
+                 selectInput("pred_sex", "Sexe:", choices = c("Femme", "Homme")),
+                 numericInput("pred_chol", "Cholestérol (mg/dl):", value = 200, min = 126, max = 564),
+                 numericInput("pred_trestbps", "Pression artérielle (mm Hg):", value = 120, min = 94, max = 200),
+                 numericInput("pred_thalach", "Fréq. cardiaque max:", value = 150, min = 71, max = 202),
+                 selectInput("pred_cp", "Douleur thoracique:",
+                             choices = c("Typique", "Atypique", "Douleur non angineuse", "Asymptomatique")),
+                 selectInput("pred_exang", "Angine à l’effort:", choices = c("Non", "Oui")),
+                 selectInput("pred_thal", "Test de thallium:",
+                             choices = c("Normal", "Défaut fixe", "Défaut réversible")),
+                 actionButton("predict", "Prédire"),
+                 verbatimTextOutput("prediction")
+        )
+      )
+    )
+  )
+)
+
+# ---- Server ----
 server <- function(input, output, session) {
-  # Données filtrées
   filtered_data <- reactive({
     validate(
       need(input$age_range[1] >= 29 && input$age_range[2] <= 77, "Plage d’âge invalide (29–77)."),
@@ -22,7 +175,6 @@ server <- function(input, output, session) {
     })
   })
   
-  # Visualisation principale
   output$plot <- renderPlot({
     tryCatch({
       data <- filtered_data()
@@ -54,7 +206,6 @@ server <- function(input, output, session) {
     })
   })
   
-  # Résumé statistique
   output$summary <- renderPrint({
     tryCatch({
       summary(filtered_data()[, input$variable, drop = FALSE])
@@ -63,7 +214,6 @@ server <- function(input, output, session) {
     })
   })
   
-  # Tableau interactif
   output$table <- renderDT({
     tryCatch({
       datatable(filtered_data(), options = list(pageLength = 5))
@@ -72,7 +222,6 @@ server <- function(input, output, session) {
     })
   })
   
-  # Graphique de corrélation
   output$corr_plot <- renderCachedPlot({
     tryCatch({
       numeric_data <- heart_data %>%
@@ -86,7 +235,6 @@ server <- function(input, output, session) {
     })
   }, cacheKeyExpr = { list("corr_plot") })
   
-  # Métriques du modèle
   output$model_metrics <- renderPrint({
     tryCatch({
       model <- models[[input$model_type]]
@@ -94,7 +242,6 @@ server <- function(input, output, session) {
         stop("Modèle non disponible : ", input$model_type)
       }
       
-      # Vérifier les niveaux des facteurs
       if (!is.factor(test_data$condition)) {
         test_data$condition <<- factor(test_data$condition, levels = c("Absence", "Présence"))
       }
@@ -102,7 +249,6 @@ server <- function(input, output, session) {
       pred <- predict(model, newdata = test_data, type = "raw")
       pred <- factor(pred, levels = levels(test_data$condition))
       
-      # Vérification des niveaux
       message("Niveaux de pred : ", paste(levels(pred), collapse = ", "))
       message("Niveaux de test_data$condition : ", paste(levels(test_data$condition), collapse = ", "))
       
@@ -127,7 +273,6 @@ server <- function(input, output, session) {
     })
   })
   
-  # Importance des variables
   output$var_imp_plot <- renderPlot({
     tryCatch({
       model <- models[[input$model_type]]
@@ -141,7 +286,6 @@ server <- function(input, output, session) {
     })
   })
   
-  # Courbe ROC
   output$roc_plot <- renderCachedPlot({
     tryCatch({
       model <- models[[input$model_type]]
@@ -156,7 +300,6 @@ server <- function(input, output, session) {
     })
   }, cacheKeyExpr = { list(input$model_type, "roc_plot") })
   
-  # Scatter Plot interactif avec plotly
   output$scatter_plot <- renderPlotly({
     tryCatch({
       data <- filtered_data()
@@ -170,7 +313,6 @@ server <- function(input, output, session) {
     })
   })
   
-  # Prédiction avec validation
   observeEvent(input$predict, {
     tryCatch({
       validate(
@@ -223,7 +365,6 @@ server <- function(input, output, session) {
     })
   })
   
-  # Exporter les données
   output$download_data <- downloadHandler(
     filename = function() { "heart_data_filtered.csv" },
     content = function(file) {
@@ -235,7 +376,6 @@ server <- function(input, output, session) {
     }
   )
   
-  # Exporter le graphique
   output$download_plot <- downloadHandler(
     filename = function() { "plot.png" },
     content = function(file) {
@@ -247,3 +387,6 @@ server <- function(input, output, session) {
     }
   )
 }
+
+# ---- Lancer l'application ----
+shinyApp(ui = ui, server = server)

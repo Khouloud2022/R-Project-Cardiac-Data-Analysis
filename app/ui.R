@@ -3,13 +3,17 @@ library(shinythemes)
 library(ggplot2)
 library(dplyr)
 library(DT)
+library(plotly)
 
 # Interface utilisateur
 ui <- fluidPage(
-  theme = shinytheme("cerulean"),  # Thème personnalisé
+  theme = shinytheme("cerulean"),
   titlePanel("Analyse des Données Cardiaques"),
   sidebarLayout(
     sidebarPanel(
+      selectInput("model_type", "Choisir le modèle:",
+                  choices = c("Régression Logistique" = "glm", "Forêt Aléatoire" = "rf", "SVM" = "svm"),
+                  selected = "glm"),
       selectInput("variable", "Choisir une variable:",
                   choices = c("age", "sex", "chol", "trestbps", "thalach")),
       selectInput("plot_type", "Type de graphique:",
@@ -17,10 +21,8 @@ ui <- fluidPage(
       checkboxInput("by_condition", "Segmenter par condition", value = TRUE),
       sliderInput("age_range", "Plage d’âge:",
                   min = 29, max = 77, value = c(29, 77)),
-      # Ajout pour le scatter plot
       selectInput("x_var", "Variable X (Scatter):", choices = c("age", "chol", "trestbps", "thalach")),
       selectInput("y_var", "Variable Y (Scatter):", choices = c("chol", "age", "trestbps", "thalach")),
-      # Bouton pour exporter
       downloadButton("download_data", "Exporter les données (CSV)"),
       downloadButton("download_plot", "Exporter le graphique (PNG)")
     ),
@@ -31,7 +33,9 @@ ui <- fluidPage(
         tabPanel("Tableau", DTOutput("table")),
         tabPanel("Corrélation", plotOutput("corr_plot")),
         tabPanel("Métriques du Modèle", verbatimTextOutput("model_metrics")),
-        tabPanel("Scatter Plot", plotOutput("scatter_plot")),
+        tabPanel("Importance des Variables", plotOutput("var_imp_plot")),
+        tabPanel("Courbe ROC", plotOutput("roc_plot")),
+        tabPanel("Scatter Plot", plotlyOutput("scatter_plot")),
         tabPanel("Prédiction",
                  h3("Prédire la Maladie Cardiaque"),
                  numericInput("pred_age", "Âge:", value = 50, min = 29, max = 77),
